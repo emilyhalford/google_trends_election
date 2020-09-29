@@ -1,5 +1,5 @@
 ---
-title: "google_trends"
+title: "Google Trends"
 author: "Emily Halford"
 date: "9/29/2020"
 output: html_document
@@ -26,4 +26,41 @@ name_order = read.csv("./data/name_order.csv", skip = 2, col.names = c("state", 
   )
 
 ```
+
+## Map 1: Name order
+
+```{r}
+
+name_order$hover = with(name_order, 
+                        paste('"Trump Biden" =', trump_biden,"%", '<br>', 
+                              '"Biden Trump" =', biden_trump,"%"))
+
+g = list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showlakes = FALSE,
+  lake_color = toRGB('white')
+)
+
+map1 = plot_geo(name_order, locationmode = "USA-states", width=1000, height=450)
+
+map1 = 
+  map1 %>% 
+  add_trace(
+    z = ~trump_biden, text = ~hover, locations = ~state, 
+    color = ~trump_biden, colors = 'Reds',
+    hoverinfo = "text"
+  )
+
+map1 = map1 %>% colorbar(title = '%"Trump Biden"')
+
+map1 = map1 %>% layout(
+    title = "Order of Presidential Candidates' Names in Google Searches<br>(Hover for breakdown)",
+    geo = g
+  )
+
+map1
+
+```
+
 
