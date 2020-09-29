@@ -1,0 +1,29 @@
+---
+title: "google_trends"
+author: "Emily Halford"
+date: "9/29/2020"
+output: html_document
+---
+
+## Loading Packages
+
+```{r libraries}
+
+library(tidyverse)
+library(plotly)
+
+```
+
+## Loading and cleaning Google Trends data
+
+```{r load_data}
+
+name_order = read.csv("./data/name_order.csv", skip = 2, col.names = c("state", "biden_trump", "trump_biden")) %>% 
+  mutate_all(funs(str_replace(., "%", ""))) %>% 
+  mutate(
+    biden_trump = as.numeric(biden_trump),
+    trump_biden = as.numeric(trump_biden)
+  )
+
+```
+
