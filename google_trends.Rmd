@@ -11,6 +11,7 @@ output: html_document
 
 library(tidyverse)
 library(plotly)
+library(gtrendsR)
 
 ```
 
@@ -18,6 +19,7 @@ library(plotly)
 
 ```{r load_data}
 
+## Name order data
 name_order = read.csv("./data/name_order.csv", skip = 2, col.names = c("state", "biden_trump", "trump_biden")) %>% 
   mutate_all(funs(str_replace(., "%", ""))) %>% 
   mutate(
@@ -25,14 +27,68 @@ name_order = read.csv("./data/name_order.csv", skip = 2, col.names = c("state", 
     trump_biden = as.numeric(trump_biden)
   )
 
+## Today's searches for "voting"
+voting = read.csv("./data/voting.csv", skip = 2, col.names = c("state", "vote_voting"))
+
+## Change in voting searches since last election
+
+voting_percentages = read.csv("./data/state_names.csv") 
+
+voting_percentages$state_code = paste0('US-', voting_percentages$state_abbreviation)
+
+voting_percentages = 
+  voting_percentages %>% 
+  mutate(
+    data = map(state_code, ~(gtrends(keyword = "vote + voting", geo = .x, time = '2016-09-30 2020-09-20')$interest_over_time))
+  )
+
+for (i in 1:50) {
+    voting_percentages$data[[i]]$hits = str_replace(voting_percentages$data[[i]]$hits, "<1", "0")
+    voting_percentages$data[[i]]$hits = as.numeric(voting_percentages$data[[i]]$hits)
+}
+
+voting_percentages =
+  voting_percentages %>% 
+  unnest(cols = data) %>% 
+  select(state, state_abbreviation, date, hits) %>% 
+  mutate(date = as.Date(date)) %>% 
+  filter(
+    date <= "2016-10-16" | date >= "2020-09-01" ## Change to october 4th
+    )
+
+voting_percentages = 
+  voting_percentages %>% 
+  separate(date, c("year", "month", "day"), "-")
+
+voting_percentages = 
+  voting_percentages %>% 
+  group_by(state_abbreviation, year) %>% 
+  summarize(october_average = mean(hits)) %>% 
+  pivot_wider(names_from = year,
+              values_from = october_average)
+
+voting_percentages = 
+  voting_percentages %>% 
+  rename(
+    october_2016 = "2016",
+    october_2020 = "2020"
+  ) %>% 
+  mutate(
+    percent_change = ((october_2020 - october_2016)/october_2016)*100
+  ) %>% 
+  mutate(
+    percent_change = round(percent_change)
+  )
+
 ```
 
 ## Map 1: Name order
 
-```{r}
+```{r map1}
 
 name_order$hover = with(name_order, 
-                        paste('"Trump Biden" =', trump_biden,"%", '<br>', 
+                        paste(state, '<br>',
+                              '"Trump Biden" =', trump_biden,"%", '<br>', 
                               '"Biden Trump" =', biden_trump,"%"))
 
 g = list(
@@ -42,7 +98,7 @@ g = list(
   lake_color = toRGB('white')
 )
 
-map1 = plot_geo(name_order, locationmode = "USA-states", width=1000, height=450)
+map1 = plot_geo(name_order, locationmode = "USA-states", width=800, height=400)
 
 map1 = 
   map1 %>% 
@@ -63,4 +119,62 @@ map1
 
 ```
 
+## Map 2: Voting Searches
+
+```{r map2}
+
+voting$hover = with(voting, 
+                        paste(state, '<br>',
+                              'Relative Proportion =', vote_voting))
+
+map2 = plot_geo(voting, locationmode = "USA-states", width=800, height=400)
+
+map2 = 
+  map2 %>% 
+  add_trace(
+    z = ~vote_voting, text = ~hover, locations = ~state, 
+    color = ~vote_voting, colors = 'Blues',
+    hoverinfo = "text"
+  )
+
+map2 = map2 %>% colorbar(title = 'Relative Search Vol.')
+
+map2 = map2 %>% layout(
+    title = 'Google Searches Containing "vote" or "voting"',
+    geo = g
+  )
+
+map2
+
+```
+
+## Map 3: % Change in Voting Searches
+
+```{r map3}
+
+voting_percentages$hover = with(voting_percentages, 
+                        paste(state_abbreviation, '<br>',
+                              '% Change =', percent_change,'%'))
+
+map3 = plot_geo(voting_percentages, locationmode = "USA-states", width=800, height=400)
+
+map3 = 
+  map3 %>% 
+  add_trace(
+    z = ~percent_change, text = ~hover, locations = ~state_abbreviation, 
+    autocolorscale = TRUE,
+    reversescale = TRUE,
+    hoverinfo = "text"
+  )
+
+map3 = map3 %>% colorbar(title = '% Change')
+
+map3 = map3 %>% layout(
+    title = 'Percent Change in Google Searches Containing "vote" or "voting"<br>October 2020 vs. October 2016',
+    geo = g
+  )
+
+map3
+
+```
 
