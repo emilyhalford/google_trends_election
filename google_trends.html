@@ -2252,12 +2252,12 @@ summary {
 <pre class="r"><code>library(tidyverse)</code></pre>
 <pre><code>## Warning: replacing previous import &#39;vctrs::data_frame&#39; by &#39;tibble::data_frame&#39;
 ## when loading &#39;dplyr&#39;</code></pre>
-<pre><code>## ── Attaching packages ──────────────────────────── tidyverse 1.3.0 ──</code></pre>
+<pre><code>## ── Attaching packages ────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse 1.3.0 ──</code></pre>
 <pre><code>## ✓ ggplot2 3.3.2     ✓ purrr   0.3.4
 ## ✓ tibble  3.0.3     ✓ dplyr   1.0.1
 ## ✓ tidyr   1.1.1     ✓ stringr 1.4.0
 ## ✓ readr   1.3.1     ✓ forcats 0.5.0</code></pre>
-<pre><code>## ── Conflicts ─────────────────────────────── tidyverse_conflicts() ──
+<pre><code>## ── Conflicts ───────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
 ## x dplyr::filter() masks stats::filter()
 ## x dplyr::lag()    masks stats::lag()</code></pre>
 <pre class="r"><code>library(plotly)</code></pre>
@@ -2272,10 +2272,12 @@ summary {
 <pre><code>## The following object is masked from &#39;package:graphics&#39;:
 ## 
 ##     layout</code></pre>
+<pre class="r"><code>library(gtrendsR)</code></pre>
 </div>
 <div id="loading-and-cleaning-google-trends-data" class="section level2">
 <h2>Loading and cleaning Google Trends data</h2>
-<pre class="r"><code>name_order = read.csv(&quot;./data/name_order.csv&quot;, skip = 2, col.names = c(&quot;state&quot;, &quot;biden_trump&quot;, &quot;trump_biden&quot;)) %&gt;% 
+<pre class="r"><code>## Name order data
+name_order = read.csv(&quot;./data/name_order.csv&quot;, skip = 2, col.names = c(&quot;state&quot;, &quot;biden_trump&quot;, &quot;trump_biden&quot;)) %&gt;% 
   mutate_all(funs(str_replace(., &quot;%&quot;, &quot;&quot;))) %&gt;% 
   mutate(
     biden_trump = as.numeric(biden_trump),
@@ -2294,11 +2296,64 @@ summary {
 ##   list(~ mean(., trim = .2), ~ median(., na.rm = TRUE))
 ## This warning is displayed once every 8 hours.
 ## Call `lifecycle::last_warnings()` to see where this warning was generated.</code></pre>
+<pre class="r"><code>## Today&#39;s searches for &quot;voting&quot;
+voting = read.csv(&quot;./data/voting.csv&quot;, skip = 2, col.names = c(&quot;state&quot;, &quot;vote_voting&quot;))
+
+## Change in voting searches since last election
+
+voting_percentages = read.csv(&quot;./data/state_names.csv&quot;) 
+
+voting_percentages$state_code = paste0(&#39;US-&#39;, voting_percentages$state_abbreviation)
+
+voting_percentages = 
+  voting_percentages %&gt;% 
+  mutate(
+    data = map(state_code, ~(gtrends(keyword = &quot;vote + voting&quot;, geo = .x, time = &#39;2016-09-30 2020-10-26&#39;)$interest_over_time))
+  )
+
+for (i in 1:50) {
+    voting_percentages$data[[i]]$hits = str_replace(voting_percentages$data[[i]]$hits, &quot;&lt;1&quot;, &quot;0&quot;)
+    voting_percentages$data[[i]]$hits = as.numeric(voting_percentages$data[[i]]$hits)
+}
+
+voting_percentages =
+  voting_percentages %&gt;% 
+  unnest(cols = data) %&gt;% 
+  select(state, state_abbreviation, date, hits) %&gt;% 
+  mutate(date = as.Date(date)) %&gt;% 
+  filter(
+    date &lt;= &quot;2016-10-23&quot; | date &gt;= &quot;2020-10-01&quot; ## Change to october 4th
+    )
+
+voting_percentages = 
+  voting_percentages %&gt;% 
+  separate(date, c(&quot;year&quot;, &quot;month&quot;, &quot;day&quot;), &quot;-&quot;)
+
+voting_percentages = 
+  voting_percentages %&gt;% 
+  group_by(state_abbreviation, year) %&gt;% 
+  summarize(october_average = mean(hits)) %&gt;% 
+  pivot_wider(names_from = year,
+              values_from = october_average)</code></pre>
+<pre><code>## `summarise()` regrouping output by &#39;state_abbreviation&#39; (override with `.groups` argument)</code></pre>
+<pre class="r"><code>voting_percentages = 
+  voting_percentages %&gt;% 
+  rename(
+    october_2016 = &quot;2016&quot;,
+    october_2020 = &quot;2020&quot;
+  ) %&gt;% 
+  mutate(
+    percent_change = ((october_2020 - october_2016)/october_2016)*100
+  ) %&gt;% 
+  mutate(
+    percent_change = round(percent_change)
+  )</code></pre>
 </div>
 <div id="map-1-name-order" class="section level2">
 <h2>Map 1: Name order</h2>
 <pre class="r"><code>name_order$hover = with(name_order, 
-                        paste(&#39;&quot;Trump Biden&quot; =&#39;, trump_biden,&quot;%&quot;, &#39;&lt;br&gt;&#39;, 
+                        paste(state, &#39;&lt;br&gt;&#39;,
+                              &#39;&quot;Trump Biden&quot; =&#39;, trump_biden,&quot;%&quot;, &#39;&lt;br&gt;&#39;, 
                               &#39;&quot;Biden Trump&quot; =&#39;, biden_trump,&quot;%&quot;))
 
 g = list(
@@ -2308,7 +2363,7 @@ g = list(
   lake_color = toRGB(&#39;white&#39;)
 )
 
-map1 = plot_geo(name_order, locationmode = &quot;USA-states&quot;, width=1000, height=450)
+map1 = plot_geo(name_order, locationmode = &quot;USA-states&quot;, width=800, height=400)
 
 map1 = 
   map1 %&gt;% 
@@ -2330,8 +2385,67 @@ map1 = map1 %&gt;% colorbar(title = &#39;%&quot;Trump Biden&quot;&#39;)</code></
   )
 
 map1</code></pre>
-<div id="htmlwidget-d8c04e47f428bbd9bd13" style="width:1000px;height:450px;" class="plotly html-widget"></div>
-<script type="application/json" data-for="htmlwidget-d8c04e47f428bbd9bd13">{"x":{"visdat":{"87db3114b345":["function () ","plotlyVisDat"]},"cur_data":"87db3114b345","attrs":{"87db3114b345":{"locationmode":"USA-states","alpha_stroke":1,"sizes":[10,100],"spans":[1,20],"z":{},"text":{},"locations":{},"color":{},"colors":"Reds","hoverinfo":"text","inherit":true}},"layout":{"width":1000,"height":450,"margin":{"b":40,"l":60,"t":25,"r":10},"mapType":"geo","scene":{"zaxis":{"title":"trump_biden"}},"geo":{"domain":{"x":[0,1],"y":[0,1]},"scope":"usa","projection":{"type":"albers usa"},"showlakes":false,"lake_color":"rgba(255,255,255,1)"},"hovermode":"closest","showlegend":false,"legend":{"yanchor":"top","y":0.5},"title":"Order of Presidential Candidates' Names in Google Searches<br>(Hover for breakdown)"},"source":"A","config":{"showSendToCloud":false},"data":[{"colorbar":{"title":"%\"Trump Biden\"","ticklen":2,"len":0.5,"lenmode":"fraction","y":1,"yanchor":"top"},"colorscale":[["0","rgba(255,245,240,1)"],["0.0416666666666668","rgba(255,238,230,1)"],["0.0833333333333332","rgba(255,231,220,1)"],["0.125","rgba(254,224,210,1)"],["0.166666666666667","rgba(254,212,193,1)"],["0.208333333333333","rgba(253,199,177,1)"],["0.25","rgba(252,187,161,1)"],["0.291666666666667","rgba(253,174,145,1)"],["0.333333333333333","rgba(253,160,129,1)"],["0.375","rgba(252,146,114,1)"],["0.416666666666667","rgba(252,133,101,1)"],["0.458333333333334","rgba(252,120,87,1)"],["0.5","rgba(251,106,74,1)"],["0.541666666666667","rgba(247,92,64,1)"],["0.583333333333334","rgba(243,77,54,1)"],["0.625","rgba(239,59,44,1)"],["0.666666666666666","rgba(227,49,39,1)"],["0.708333333333334","rgba(215,37,34,1)"],["0.75","rgba(203,24,29,1)"],["0.791666666666666","rgba(190,21,26,1)"],["0.833333333333334","rgba(178,18,24,1)"],["0.875","rgba(165,15,21,1)"],["0.916666666666667","rgba(144,9,19,1)"],["0.958333333333334","rgba(123,3,16,1)"],["1","rgba(103,0,13,1)"]],"showscale":true,"locationmode":"USA-states","z":[52,63,72,61,61,62,67,66,66,55,63,63,65,66,60,67,64,63,66,61,67,61,66,66,68,69,59,66,62,66,64,67,62,59,72,65,62,59,66,67,65,62,64,64,68,64,65,61,60,64,67],"text":["\"Trump Biden\" = 52 % <br> \"Biden Trump\" = 48 %","\"Trump Biden\" = 63 % <br> \"Biden Trump\" = 37 %","\"Trump Biden\" = 72 % <br> \"Biden Trump\" = 28 %","\"Trump Biden\" = 61 % <br> \"Biden Trump\" = 39 %","\"Trump Biden\" = 61 % <br> \"Biden Trump\" = 39 %","\"Trump Biden\" = 62 % <br> \"Biden Trump\" = 38 %","\"Trump Biden\" = 67 % <br> \"Biden Trump\" = 33 %","\"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","\"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","\"Trump Biden\" = 55 % <br> \"Biden Trump\" = 45 %","\"Trump Biden\" = 63 % <br> \"Biden Trump\" = 37 %","\"Trump Biden\" = 63 % <br> \"Biden Trump\" = 37 %","\"Trump Biden\" = 65 % <br> \"Biden Trump\" = 35 %","\"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","\"Trump Biden\" = 60 % <br> \"Biden Trump\" = 40 %","\"Trump Biden\" = 67 % <br> \"Biden Trump\" = 33 %","\"Trump Biden\" = 64 % <br> \"Biden Trump\" = 36 %","\"Trump Biden\" = 63 % <br> \"Biden Trump\" = 37 %","\"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","\"Trump Biden\" = 61 % <br> \"Biden Trump\" = 39 %","\"Trump Biden\" = 67 % <br> \"Biden Trump\" = 33 %","\"Trump Biden\" = 61 % <br> \"Biden Trump\" = 39 %","\"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","\"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","\"Trump Biden\" = 68 % <br> \"Biden Trump\" = 32 %","\"Trump Biden\" = 69 % <br> \"Biden Trump\" = 31 %","\"Trump Biden\" = 59 % <br> \"Biden Trump\" = 41 %","\"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","\"Trump Biden\" = 62 % <br> \"Biden Trump\" = 38 %","\"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","\"Trump Biden\" = 64 % <br> \"Biden Trump\" = 36 %","\"Trump Biden\" = 67 % <br> \"Biden Trump\" = 33 %","\"Trump Biden\" = 62 % <br> \"Biden Trump\" = 38 %","\"Trump Biden\" = 59 % <br> \"Biden Trump\" = 41 %","\"Trump Biden\" = 72 % <br> \"Biden Trump\" = 28 %","\"Trump Biden\" = 65 % <br> \"Biden Trump\" = 35 %","\"Trump Biden\" = 62 % <br> \"Biden Trump\" = 38 %","\"Trump Biden\" = 59 % <br> \"Biden Trump\" = 41 %","\"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","\"Trump Biden\" = 67 % <br> \"Biden Trump\" = 33 %","\"Trump Biden\" = 65 % <br> \"Biden Trump\" = 35 %","\"Trump Biden\" = 62 % <br> \"Biden Trump\" = 38 %","\"Trump Biden\" = 64 % <br> \"Biden Trump\" = 36 %","\"Trump Biden\" = 64 % <br> \"Biden Trump\" = 36 %","\"Trump Biden\" = 68 % <br> \"Biden Trump\" = 32 %","\"Trump Biden\" = 64 % <br> \"Biden Trump\" = 36 %","\"Trump Biden\" = 65 % <br> \"Biden Trump\" = 35 %","\"Trump Biden\" = 61 % <br> \"Biden Trump\" = 39 %","\"Trump Biden\" = 60 % <br> \"Biden Trump\" = 40 %","\"Trump Biden\" = 64 % <br> \"Biden Trump\" = 36 %","\"Trump Biden\" = 67 % <br> \"Biden Trump\" = 33 %"],"locations":["DC","MA","ME","NH","OR","MN","VA","MD","NJ","VT","CT","WA","PA","RI","NY","AZ","IL","CO","WI","CA","NC","ND","MT","MI","SD","IA","UT","FL","ID","NV","OH","TN","AK","DE","NE","KY","MO","HI","WV","KS","NM","IN","GA","OK","LA","SC","WY","AR","AL","MS","TX"],"hoverinfo":["text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text"],"type":"choropleth","marker":{"line":{"colorbar":{"title":"","ticklen":2},"cmin":52,"cmax":72,"colorscale":[["0","rgba(255,245,240,1)"],["0.0416666666666668","rgba(255,238,230,1)"],["0.0833333333333332","rgba(255,231,220,1)"],["0.125","rgba(254,224,210,1)"],["0.166666666666667","rgba(254,212,193,1)"],["0.208333333333333","rgba(253,199,177,1)"],["0.25","rgba(252,187,161,1)"],["0.291666666666667","rgba(253,174,145,1)"],["0.333333333333333","rgba(253,160,129,1)"],["0.375","rgba(252,146,114,1)"],["0.416666666666667","rgba(252,133,101,1)"],["0.458333333333334","rgba(252,120,87,1)"],["0.5","rgba(251,106,74,1)"],["0.541666666666667","rgba(247,92,64,1)"],["0.583333333333334","rgba(243,77,54,1)"],["0.625","rgba(239,59,44,1)"],["0.666666666666666","rgba(227,49,39,1)"],["0.708333333333334","rgba(215,37,34,1)"],["0.75","rgba(203,24,29,1)"],["0.791666666666666","rgba(190,21,26,1)"],["0.833333333333334","rgba(178,18,24,1)"],["0.875","rgba(165,15,21,1)"],["0.916666666666667","rgba(144,9,19,1)"],["0.958333333333334","rgba(123,3,16,1)"],["1","rgba(103,0,13,1)"]],"showscale":false,"color":[52,63,72,61,61,62,67,66,66,55,63,63,65,66,60,67,64,63,66,61,67,61,66,66,68,69,59,66,62,66,64,67,62,59,72,65,62,59,66,67,65,62,64,64,68,64,65,61,60,64,67]}},"geo":"geo","frame":null}],"highlight":{"on":"plotly_click","persistent":false,"dynamic":false,"selectize":false,"opacityDim":0.2,"selected":{"opacity":1},"debounce":0},"shinyEvents":["plotly_hover","plotly_click","plotly_selected","plotly_relayout","plotly_brushed","plotly_brushing","plotly_clickannotation","plotly_doubleclick","plotly_deselect","plotly_afterplot","plotly_sunburstclick"],"base_url":"https://plot.ly"},"evals":[],"jsHooks":[]}</script>
+<div id="htmlwidget-e54a4ae7a5abfa6599a8" style="width:800px;height:400px;" class="plotly html-widget"></div>
+<script type="application/json" data-for="htmlwidget-e54a4ae7a5abfa6599a8">{"x":{"visdat":{"986d6f52ff6f":["function () ","plotlyVisDat"]},"cur_data":"986d6f52ff6f","attrs":{"986d6f52ff6f":{"locationmode":"USA-states","alpha_stroke":1,"sizes":[10,100],"spans":[1,20],"z":{},"text":{},"locations":{},"color":{},"colors":"Reds","hoverinfo":"text","inherit":true}},"layout":{"width":800,"height":400,"margin":{"b":40,"l":60,"t":25,"r":10},"mapType":"geo","scene":{"zaxis":{"title":"trump_biden"}},"geo":{"domain":{"x":[0,1],"y":[0,1]},"scope":"usa","projection":{"type":"albers usa"},"showlakes":false,"lake_color":"rgba(255,255,255,1)"},"hovermode":"closest","showlegend":false,"legend":{"yanchor":"top","y":0.5},"title":"Order of Presidential Candidates' Names in Google Searches<br>(Hover for breakdown)"},"source":"A","config":{"showSendToCloud":false},"data":[{"colorbar":{"title":"%\"Trump Biden\"","ticklen":2,"len":0.5,"lenmode":"fraction","y":1,"yanchor":"top"},"colorscale":[["0","rgba(255,245,240,1)"],["0.0416666666666667","rgba(255,238,230,1)"],["0.0833333333333333","rgba(255,231,220,1)"],["0.125","rgba(254,224,210,1)"],["0.166666666666667","rgba(254,212,193,1)"],["0.208333333333333","rgba(253,199,177,1)"],["0.25","rgba(252,187,161,1)"],["0.291666666666667","rgba(253,174,145,1)"],["0.333333333333333","rgba(253,160,129,1)"],["0.375","rgba(252,146,114,1)"],["0.416666666666667","rgba(252,133,101,1)"],["0.458333333333333","rgba(252,120,87,1)"],["0.5","rgba(251,106,74,1)"],["0.541666666666667","rgba(247,92,64,1)"],["0.583333333333333","rgba(243,77,54,1)"],["0.625","rgba(239,59,44,1)"],["0.666666666666667","rgba(227,49,39,1)"],["0.708333333333333","rgba(215,37,34,1)"],["0.75","rgba(203,24,29,1)"],["0.791666666666667","rgba(190,21,26,1)"],["0.833333333333333","rgba(178,18,24,1)"],["0.875","rgba(165,15,21,1)"],["0.916666666666667","rgba(144,9,19,1)"],["0.958333333333333","rgba(123,3,16,1)"],["1","rgba(103,0,13,1)"]],"showscale":true,"locationmode":"USA-states","z":[66,58,67,58,80,78,65,66,70,68,72,70,69,68,74,70,68,64,73,67,69,74,79,69,73,73,62,69,77,71,71,73,69,70,67,77,75,67,71,76,70,68,77,72,75,70,75,79,71,80,56],"text":["VT <br> \"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","DC <br> \"Trump Biden\" = 58 % <br> \"Biden Trump\" = 42 %","MA <br> \"Trump Biden\" = 67 % <br> \"Biden Trump\" = 33 %","OR <br> \"Trump Biden\" = 58 % <br> \"Biden Trump\" = 42 %","NE <br> \"Trump Biden\" = 80 % <br> \"Biden Trump\" = 20 %","WI <br> \"Trump Biden\" = 78 % <br> \"Biden Trump\" = 22 %","NH <br> \"Trump Biden\" = 65 % <br> \"Biden Trump\" = 35 %","HI <br> \"Trump Biden\" = 66 % <br> \"Biden Trump\" = 34 %","MT <br> \"Trump Biden\" = 70 % <br> \"Biden Trump\" = 30 %","CT <br> \"Trump Biden\" = 68 % <br> \"Biden Trump\" = 32 %","NM <br> \"Trump Biden\" = 72 % <br> \"Biden Trump\" = 28 %","WA <br> \"Trump Biden\" = 70 % <br> \"Biden Trump\" = 30 %","MN <br> \"Trump Biden\" = 69 % <br> \"Biden Trump\" = 31 %","NJ <br> \"Trump Biden\" = 68 % <br> \"Biden Trump\" = 32 %","CO <br> \"Trump Biden\" = 74 % <br> \"Biden Trump\" = 26 %","PA <br> \"Trump Biden\" = 70 % <br> \"Biden Trump\" = 30 %","CA <br> \"Trump Biden\" = 68 % <br> \"Biden Trump\" = 32 %","ME <br> \"Trump Biden\" = 64 % <br> \"Biden Trump\" = 36 %","IL <br> \"Trump Biden\" = 73 % <br> \"Biden Trump\" = 27 %","DE <br> \"Trump Biden\" = 67 % <br> \"Biden Trump\" = 33 %","NY <br> \"Trump Biden\" = 69 % <br> \"Biden Trump\" = 31 %","AK <br> \"Trump Biden\" = 74 % <br> \"Biden Trump\" = 26 %","IA <br> \"Trump Biden\" = 79 % <br> \"Biden Trump\" = 21 %","VA <br> \"Trump Biden\" = 69 % <br> \"Biden Trump\" = 31 %","ID <br> \"Trump Biden\" = 73 % <br> \"Biden Trump\" = 27 %","FL <br> \"Trump Biden\" = 73 % <br> \"Biden Trump\" = 27 %","AZ <br> \"Trump Biden\" = 62 % <br> \"Biden Trump\" = 38 %","RI <br> \"Trump Biden\" = 69 % <br> \"Biden Trump\" = 31 %","UT <br> \"Trump Biden\" = 77 % <br> \"Biden Trump\" = 23 %","TN <br> \"Trump Biden\" = 71 % <br> \"Biden Trump\" = 29 %","MI <br> \"Trump Biden\" = 71 % <br> \"Biden Trump\" = 29 %","OH <br> \"Trump Biden\" = 73 % <br> \"Biden Trump\" = 27 %","WY <br> \"Trump Biden\" = 69 % <br> \"Biden Trump\" = 31 %","KY <br> \"Trump Biden\" = 70 % <br> \"Biden Trump\" = 30 %","MD <br> \"Trump Biden\" = 67 % <br> \"Biden Trump\" = 33 %","IN <br> \"Trump Biden\" = 77 % <br> \"Biden Trump\" = 23 %","NC <br> \"Trump Biden\" = 75 % <br> \"Biden Trump\" = 25 %","WV <br> \"Trump Biden\" = 67 % <br> \"Biden Trump\" = 33 %","TX <br> \"Trump Biden\" = 71 % <br> \"Biden Trump\" = 29 %","GA <br> \"Trump Biden\" = 76 % <br> \"Biden Trump\" = 24 %","SD <br> \"Trump Biden\" = 70 % <br> \"Biden Trump\" = 30 %","NV <br> \"Trump Biden\" = 68 % <br> \"Biden Trump\" = 32 %","MO <br> \"Trump Biden\" = 77 % <br> \"Biden Trump\" = 23 %","AR <br> \"Trump Biden\" = 72 % <br> \"Biden Trump\" = 28 %","OK <br> \"Trump Biden\" = 75 % <br> \"Biden Trump\" = 25 %","KS <br> \"Trump Biden\" = 70 % <br> \"Biden Trump\" = 30 %","SC <br> \"Trump Biden\" = 75 % <br> \"Biden Trump\" = 25 %","LA <br> \"Trump Biden\" = 79 % <br> \"Biden Trump\" = 21 %","AL <br> \"Trump Biden\" = 71 % <br> \"Biden Trump\" = 29 %","MS <br> \"Trump Biden\" = 80 % <br> \"Biden Trump\" = 20 %","ND <br> \"Trump Biden\" = 56 % <br> \"Biden Trump\" = 44 %"],"locations":["VT","DC","MA","OR","NE","WI","NH","HI","MT","CT","NM","WA","MN","NJ","CO","PA","CA","ME","IL","DE","NY","AK","IA","VA","ID","FL","AZ","RI","UT","TN","MI","OH","WY","KY","MD","IN","NC","WV","TX","GA","SD","NV","MO","AR","OK","KS","SC","LA","AL","MS","ND"],"hoverinfo":["text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text"],"type":"choropleth","marker":{"line":{"colorbar":{"title":"","ticklen":2},"cmin":56,"cmax":80,"colorscale":[["0","rgba(255,245,240,1)"],["0.0416666666666667","rgba(255,238,230,1)"],["0.0833333333333333","rgba(255,231,220,1)"],["0.125","rgba(254,224,210,1)"],["0.166666666666667","rgba(254,212,193,1)"],["0.208333333333333","rgba(253,199,177,1)"],["0.25","rgba(252,187,161,1)"],["0.291666666666667","rgba(253,174,145,1)"],["0.333333333333333","rgba(253,160,129,1)"],["0.375","rgba(252,146,114,1)"],["0.416666666666667","rgba(252,133,101,1)"],["0.458333333333333","rgba(252,120,87,1)"],["0.5","rgba(251,106,74,1)"],["0.541666666666667","rgba(247,92,64,1)"],["0.583333333333333","rgba(243,77,54,1)"],["0.625","rgba(239,59,44,1)"],["0.666666666666667","rgba(227,49,39,1)"],["0.708333333333333","rgba(215,37,34,1)"],["0.75","rgba(203,24,29,1)"],["0.791666666666667","rgba(190,21,26,1)"],["0.833333333333333","rgba(178,18,24,1)"],["0.875","rgba(165,15,21,1)"],["0.916666666666667","rgba(144,9,19,1)"],["0.958333333333333","rgba(123,3,16,1)"],["1","rgba(103,0,13,1)"]],"showscale":false,"color":[66,58,67,58,80,78,65,66,70,68,72,70,69,68,74,70,68,64,73,67,69,74,79,69,73,73,62,69,77,71,71,73,69,70,67,77,75,67,71,76,70,68,77,72,75,70,75,79,71,80,56]}},"geo":"geo","frame":null}],"highlight":{"on":"plotly_click","persistent":false,"dynamic":false,"selectize":false,"opacityDim":0.2,"selected":{"opacity":1},"debounce":0},"shinyEvents":["plotly_hover","plotly_click","plotly_selected","plotly_relayout","plotly_brushed","plotly_brushing","plotly_clickannotation","plotly_doubleclick","plotly_deselect","plotly_afterplot","plotly_sunburstclick"],"base_url":"https://plot.ly"},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="map-2-voting-searches" class="section level2">
+<h2>Map 2: Voting Searches</h2>
+<pre class="r"><code>voting$hover = with(voting, 
+                        paste(state, &#39;&lt;br&gt;&#39;,
+                              &#39;Relative Proportion =&#39;, vote_voting))
+
+map2 = plot_geo(voting, locationmode = &quot;USA-states&quot;, width=800, height=400)
+
+map2 = 
+  map2 %&gt;% 
+  add_trace(
+    z = ~vote_voting, text = ~hover, locations = ~state, 
+    color = ~vote_voting, colors = &#39;Blues&#39;,
+    hoverinfo = &quot;text&quot;
+  )
+
+map2 = map2 %&gt;% colorbar(title = &#39;Relative Search Vol.&#39;)
+
+map2 = map2 %&gt;% layout(
+    title = &#39;Google Searches Containing &quot;vote&quot; or &quot;voting&quot;&#39;,
+    geo = g
+  )
+
+map2</code></pre>
+<div id="htmlwidget-1fb8d8077847e8ab6571" style="width:800px;height:400px;" class="plotly html-widget"></div>
+<script type="application/json" data-for="htmlwidget-1fb8d8077847e8ab6571">{"x":{"visdat":{"986d20704f73":["function () ","plotlyVisDat"]},"cur_data":"986d20704f73","attrs":{"986d20704f73":{"locationmode":"USA-states","alpha_stroke":1,"sizes":[10,100],"spans":[1,20],"z":{},"text":{},"locations":{},"color":{},"colors":"Blues","hoverinfo":"text","inherit":true}},"layout":{"width":800,"height":400,"margin":{"b":40,"l":60,"t":25,"r":10},"mapType":"geo","scene":{"zaxis":{"title":"vote_voting"}},"geo":{"domain":{"x":[0,1],"y":[0,1]},"scope":"usa","projection":{"type":"albers usa"},"showlakes":false,"lake_color":"rgba(255,255,255,1)"},"hovermode":"closest","showlegend":false,"legend":{"yanchor":"top","y":0.5},"title":"Google Searches Containing \"vote\" or \"voting\""},"source":"A","config":{"showSendToCloud":false},"data":[{"colorbar":{"title":"Relative Search Vol.","ticklen":2,"len":0.5,"lenmode":"fraction","y":1,"yanchor":"top"},"colorscale":[["0","rgba(247,251,255,1)"],["0.0416666666666666","rgba(239,246,252,1)"],["0.0833333333333334","rgba(230,240,250,1)"],["0.125","rgba(222,235,247,1)"],["0.166666666666667","rgba(214,230,244,1)"],["0.208333333333333","rgba(206,224,242,1)"],["0.25","rgba(198,219,239,1)"],["0.291666666666667","rgba(185,213,234,1)"],["0.333333333333333","rgba(172,208,230,1)"],["0.375","rgba(158,202,225,1)"],["0.416666666666667","rgba(142,193,221,1)"],["0.458333333333333","rgba(125,183,218,1)"],["0.5","rgba(107,174,214,1)"],["0.541666666666667","rgba(94,165,209,1)"],["0.583333333333333","rgba(81,155,203,1)"],["0.625","rgba(66,146,198,1)"],["0.666666666666667","rgba(57,135,192,1)"],["0.708333333333333","rgba(46,124,187,1)"],["0.75","rgba(33,113,181,1)"],["0.791666666666667","rgba(27,102,173,1)"],["0.833333333333333","rgba(19,91,164,1)"],["0.875","rgba(8,81,156,1)"],["0.916666666666667","rgba(9,70,139,1)"],["0.958333333333333","rgba(9,59,123,1)"],["1","rgba(8,48,107,1)"]],"showscale":true,"locationmode":"USA-states","z":[100,86,83,80,78,73,71,70,69,69,68,62,60,60,59,58,57,55,53,52,52,51,50,49,49,49,49,49,48,47,47,46,46,46,45,44,43,43,42,42,42,42,42,41,40,40,39,38,37,36,36],"text":["TX <br> Relative Proportion = 100","NC <br> Relative Proportion = 86","TN <br> Relative Proportion = 83","GA <br> Relative Proportion = 80","NM <br> Relative Proportion = 78","AR <br> Relative Proportion = 73","FL <br> Relative Proportion = 71","IN <br> Relative Proportion = 70","DC <br> Relative Proportion = 69","LA <br> Relative Proportion = 69","SC <br> Relative Proportion = 68","VA <br> Relative Proportion = 62","IL <br> Relative Proportion = 60","AZ <br> Relative Proportion = 60","AK <br> Relative Proportion = 59","KS <br> Relative Proportion = 58","NV <br> Relative Proportion = 57","MA <br> Relative Proportion = 55","WI <br> Relative Proportion = 53","OH <br> Relative Proportion = 52","ME <br> Relative Proportion = 52","KY <br> Relative Proportion = 51","MN <br> Relative Proportion = 50","ID <br> Relative Proportion = 49","PA <br> Relative Proportion = 49","WV <br> Relative Proportion = 49","IA <br> Relative Proportion = 49","MD <br> Relative Proportion = 49","UT <br> Relative Proportion = 48","RI <br> Relative Proportion = 47","CO <br> Relative Proportion = 47","SD <br> Relative Proportion = 46","WA <br> Relative Proportion = 46","MO <br> Relative Proportion = 46","ND <br> Relative Proportion = 45","NJ <br> Relative Proportion = 44","OR <br> Relative Proportion = 43","DE <br> Relative Proportion = 43","AL <br> Relative Proportion = 42","NE <br> Relative Proportion = 42","MT <br> Relative Proportion = 42","MI <br> Relative Proportion = 42","OK <br> Relative Proportion = 42","NY <br> Relative Proportion = 41","WY <br> Relative Proportion = 40","NH <br> Relative Proportion = 40","CA <br> Relative Proportion = 39","CT <br> Relative Proportion = 38","MS <br> Relative Proportion = 37","VT <br> Relative Proportion = 36","HI <br> Relative Proportion = 36"],"locations":["TX","NC","TN","GA","NM","AR","FL","IN","DC","LA","SC","VA","IL","AZ","AK","KS","NV","MA","WI","OH","ME","KY","MN","ID","PA","WV","IA","MD","UT","RI","CO","SD","WA","MO","ND","NJ","OR","DE","AL","NE","MT","MI","OK","NY","WY","NH","CA","CT","MS","VT","HI"],"hoverinfo":["text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text"],"type":"choropleth","marker":{"line":{"colorbar":{"title":"","ticklen":2},"cmin":36,"cmax":100,"colorscale":[["0","rgba(247,251,255,1)"],["0.0416666666666666","rgba(239,246,252,1)"],["0.0833333333333334","rgba(230,240,250,1)"],["0.125","rgba(222,235,247,1)"],["0.166666666666667","rgba(214,230,244,1)"],["0.208333333333333","rgba(206,224,242,1)"],["0.25","rgba(198,219,239,1)"],["0.291666666666667","rgba(185,213,234,1)"],["0.333333333333333","rgba(172,208,230,1)"],["0.375","rgba(158,202,225,1)"],["0.416666666666667","rgba(142,193,221,1)"],["0.458333333333333","rgba(125,183,218,1)"],["0.5","rgba(107,174,214,1)"],["0.541666666666667","rgba(94,165,209,1)"],["0.583333333333333","rgba(81,155,203,1)"],["0.625","rgba(66,146,198,1)"],["0.666666666666667","rgba(57,135,192,1)"],["0.708333333333333","rgba(46,124,187,1)"],["0.75","rgba(33,113,181,1)"],["0.791666666666667","rgba(27,102,173,1)"],["0.833333333333333","rgba(19,91,164,1)"],["0.875","rgba(8,81,156,1)"],["0.916666666666667","rgba(9,70,139,1)"],["0.958333333333333","rgba(9,59,123,1)"],["1","rgba(8,48,107,1)"]],"showscale":false,"color":[100,86,83,80,78,73,71,70,69,69,68,62,60,60,59,58,57,55,53,52,52,51,50,49,49,49,49,49,48,47,47,46,46,46,45,44,43,43,42,42,42,42,42,41,40,40,39,38,37,36,36]}},"geo":"geo","frame":null}],"highlight":{"on":"plotly_click","persistent":false,"dynamic":false,"selectize":false,"opacityDim":0.2,"selected":{"opacity":1},"debounce":0},"shinyEvents":["plotly_hover","plotly_click","plotly_selected","plotly_relayout","plotly_brushed","plotly_brushing","plotly_clickannotation","plotly_doubleclick","plotly_deselect","plotly_afterplot","plotly_sunburstclick"],"base_url":"https://plot.ly"},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="map-3-change-in-voting-searches" class="section level2">
+<h2>Map 3: % Change in Voting Searches</h2>
+<pre class="r"><code>voting_percentages$hover = with(voting_percentages, 
+                        paste(state_abbreviation, &#39;&lt;br&gt;&#39;,
+                              &#39;% Change =&#39;, percent_change,&#39;%&#39;))
+
+map3 = plot_geo(voting_percentages, locationmode = &quot;USA-states&quot;, width=800, height=400)
+
+map3 = 
+  map3 %&gt;% 
+  add_trace(
+    z = ~percent_change, text = ~hover, locations = ~state_abbreviation, 
+    autocolorscale = TRUE,
+    hoverinfo = &quot;text&quot;
+  )
+
+map3 = map3 %&gt;% colorbar(title = &#39;% Change&#39;)
+
+map3 = map3 %&gt;% layout(
+    title = &#39;Percent Change in Google Searches Containing &quot;vote&quot; or &quot;voting&quot;&lt;br&gt;October 2020 vs. October 2016&#39;,
+    geo = g
+  )
+
+map3</code></pre>
+<div id="htmlwidget-aa6541155a982284fcc7" style="width:800px;height:400px;" class="plotly html-widget"></div>
+<script type="application/json" data-for="htmlwidget-aa6541155a982284fcc7">{"x":{"visdat":{"986d1a212de6":["function () ","plotlyVisDat"]},"cur_data":"986d1a212de6","attrs":{"986d1a212de6":{"locationmode":"USA-states","alpha_stroke":1,"sizes":[10,100],"spans":[1,20],"z":{},"text":{},"locations":{},"autocolorscale":true,"hoverinfo":"text","inherit":true}},"layout":{"width":800,"height":400,"margin":{"b":40,"l":60,"t":25,"r":10},"mapType":"geo","scene":{"zaxis":{"title":"percent_change"}},"geo":{"domain":{"x":[0,1],"y":[0,1]},"scope":"usa","projection":{"type":"albers usa"},"showlakes":false,"lake_color":"rgba(255,255,255,1)"},"hovermode":"closest","showlegend":false,"legend":{"yanchor":"top","y":0.5},"title":"Percent Change in Google Searches Containing \"vote\" or \"voting\"<br>October 2020 vs. October 2016"},"source":"A","config":{"showSendToCloud":false},"data":[{"colorbar":{"title":"% Change","ticklen":2,"len":0.5,"lenmode":"fraction","y":1,"yanchor":"top"},"colorscale":[["0","rgba(68,1,84,1)"],["0.0416666666666667","rgba(70,19,97,1)"],["0.0833333333333333","rgba(72,32,111,1)"],["0.125","rgba(71,45,122,1)"],["0.166666666666667","rgba(68,58,128,1)"],["0.208333333333333","rgba(64,70,135,1)"],["0.25","rgba(60,82,138,1)"],["0.291666666666667","rgba(56,93,140,1)"],["0.333333333333333","rgba(49,104,142,1)"],["0.375","rgba(46,114,142,1)"],["0.416666666666667","rgba(42,123,142,1)"],["0.458333333333333","rgba(38,133,141,1)"],["0.5","rgba(37,144,140,1)"],["0.541666666666667","rgba(33,154,138,1)"],["0.583333333333333","rgba(39,164,133,1)"],["0.625","rgba(47,174,127,1)"],["0.666666666666667","rgba(53,183,121,1)"],["0.708333333333333","rgba(79,191,110,1)"],["0.75","rgba(98,199,98,1)"],["0.791666666666667","rgba(119,207,85,1)"],["0.833333333333333","rgba(147,214,70,1)"],["0.875","rgba(172,220,52,1)"],["0.916666666666667","rgba(199,225,42,1)"],["0.958333333333333","rgba(226,228,40,1)"],["1","rgba(253,231,37,1)"]],"showscale":true,"locationmode":"USA-states","z":[87,19,56,94,36,52,45,60,52,52,50,13,36,39,68,72,51,75,44,33,14,30,53,24,48,37,79,44,54,22,11,30,55,17,50,57,25,51,69,92,101,46,61,68,39,60,44,67,62,40,33],"text":["AK <br> % Change = 87 %","AL <br> % Change = 19 %","AR <br> % Change = 56 %","AZ <br> % Change = 94 %","CA <br> % Change = 36 %","CO <br> % Change = 52 %","CT <br> % Change = 45 %","DC <br> % Change = 60 %","DE <br> % Change = 52 %","FL <br> % Change = 52 %","GA <br> % Change = 50 %","HI <br> % Change = 13 %","IA <br> % Change = 36 %","ID <br> % Change = 39 %","IL <br> % Change = 68 %","IN <br> % Change = 72 %","KS <br> % Change = 51 %","KY <br> % Change = 75 %","LA <br> % Change = 44 %","MA <br> % Change = 33 %","MD <br> % Change = 14 %","ME <br> % Change = 30 %","MI <br> % Change = 53 %","MN <br> % Change = 24 %","MO <br> % Change = 48 %","MS <br> % Change = 37 %","MT <br> % Change = 79 %","NC <br> % Change = 44 %","ND <br> % Change = 54 %","NE <br> % Change = 22 %","NH <br> % Change = 11 %","NJ <br> % Change = 30 %","NM <br> % Change = 55 %","NV <br> % Change = 17 %","NY <br> % Change = 50 %","OH <br> % Change = 57 %","OK <br> % Change = 25 %","OR <br> % Change = 51 %","PA <br> % Change = 69 %","RI <br> % Change = 92 %","SC <br> % Change = 101 %","SD <br> % Change = 46 %","TN <br> % Change = 61 %","TX <br> % Change = 68 %","UT <br> % Change = 39 %","VA <br> % Change = 60 %","VT <br> % Change = 44 %","WA <br> % Change = 67 %","WI <br> % Change = 62 %","WV <br> % Change = 40 %","WY <br> % Change = 33 %"],"locations":["AK","AL","AR","AZ","CA","CO","CT","DC","DE","FL","GA","HI","IA","ID","IL","IN","KS","KY","LA","MA","MD","ME","MI","MN","MO","MS","MT","NC","ND","NE","NH","NJ","NM","NV","NY","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VA","VT","WA","WI","WV","WY"],"autocolorscale":true,"hoverinfo":["text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text","text"],"type":"choropleth","marker":{"line":{"color":"rgba(31,119,180,1)"}},"geo":"geo","frame":null}],"highlight":{"on":"plotly_click","persistent":false,"dynamic":false,"selectize":false,"opacityDim":0.2,"selected":{"opacity":1},"debounce":0},"shinyEvents":["plotly_hover","plotly_click","plotly_selected","plotly_relayout","plotly_brushed","plotly_brushing","plotly_clickannotation","plotly_doubleclick","plotly_deselect","plotly_afterplot","plotly_sunburstclick"],"base_url":"https://plot.ly"},"evals":[],"jsHooks":[]}</script>
+<pre class="r"><code>#Sys.setenv(&#39;plotly_username&#39;=&#39;xxxx&#39;)
+#Sys.setenv(&#39;plotly_api_key&#39;=&#39;xxxx&#39;)
+#api_create(map1, filename = &#39;map1&#39;, sharing = &#39;public&#39;)
+#api_create(map2, filename = &#39;map2&#39;, sharing = &#39;public&#39;)
+#api_create(map3, filename = &#39;map3&#39;, sharing = &#39;public&#39;)</code></pre>
 </div>
 
 

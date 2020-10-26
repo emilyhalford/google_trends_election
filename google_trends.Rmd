@@ -39,7 +39,7 @@ voting_percentages$state_code = paste0('US-', voting_percentages$state_abbreviat
 voting_percentages = 
   voting_percentages %>% 
   mutate(
-    data = map(state_code, ~(gtrends(keyword = "vote + voting", geo = .x, time = '2016-09-30 2020-09-20')$interest_over_time))
+    data = map(state_code, ~(gtrends(keyword = "vote + voting", geo = .x, time = '2016-09-30 2020-10-26')$interest_over_time))
   )
 
 for (i in 1:50) {
@@ -53,7 +53,7 @@ voting_percentages =
   select(state, state_abbreviation, date, hits) %>% 
   mutate(date = as.Date(date)) %>% 
   filter(
-    date <= "2016-10-16" | date >= "2020-09-01" ## Change to october 4th
+    date <= "2016-10-23" | date >= "2020-10-01" ## Change to october 4th
     )
 
 voting_percentages = 
@@ -163,7 +163,6 @@ map3 =
   add_trace(
     z = ~percent_change, text = ~hover, locations = ~state_abbreviation, 
     autocolorscale = TRUE,
-    reversescale = TRUE,
     hoverinfo = "text"
   )
 
@@ -176,5 +175,10 @@ map3 = map3 %>% layout(
 
 map3
 
+#Sys.setenv('plotly_username'='xxxx')
+#Sys.setenv('plotly_api_key'='xxxx')
+#api_create(map1, filename = 'map1', sharing = 'public')
+#api_create(map2, filename = 'map2', sharing = 'public')
+#api_create(map3, filename = 'map3', sharing = 'public')
 ```
 
