@@ -1,7 +1,7 @@
 ---
 title: "Google Trends"
 author: "Emily Halford"
-date: "9/29/2020"
+date: "12/19/2020"
 output: html_document
 ---
 
@@ -177,8 +177,24 @@ map3 = map3 %>% layout(
 
 map3
 
+#Sys.setenv('plotly_username'='xxxx')
+#Sys.setenv('plotly_api_key'='xxxx')
+#api_create(map1, filename = 'map1', sharing = 'public')
+#api_create(map2, filename = 'map2v2', sharing = 'public')
+#api_create(map3, filename = 'map3v2', sharing = 'public')
+```
+
+## Correlation calculation
+```{r correlation}
 
 correlation = read_csv("./data/correlation.csv")
+
+correlation =
+  correlation %>% 
+  mutate(
+    percent_change = log(percent_change),
+    turnout_change = log(turnout_change)
+  )
 
 cor.test(correlation$percent_change, correlation$turnout_change, method = "pearson") 
 
@@ -192,10 +208,8 @@ correlation %>%
   ) + 
   theme_minimal()
 
-#Sys.setenv('plotly_username'='xxxx')
-#Sys.setenv('plotly_api_key'='xxxx')
-#api_create(map1, filename = 'map1', sharing = 'public')
-#api_create(map2, filename = 'map2v2', sharing = 'public')
-#api_create(map3, filename = 'map3v2', sharing = 'public')
+
+0.1703231*0.1703231
+
 ```
 
