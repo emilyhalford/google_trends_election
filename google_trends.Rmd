@@ -28,7 +28,9 @@ name_order = read.csv("./data/name_order.csv", skip = 2, col.names = c("state", 
   )
 
 ## Today's searches for "voting"
-voting = read.csv("./data/voting.csv", skip = 2, col.names = c("state", "vote_voting"))
+#voting = read.csv("./data/voting.csv", skip = 2, col.names = c("state", "vote_voting"))
+
+voting = read.csv("./data/voting_121920.csv", skip = 2, col.names = c("state", "vote_voting"))
 
 ## Change in voting searches since last election
 
@@ -39,10 +41,10 @@ voting_percentages$state_code = paste0('US-', voting_percentages$state_abbreviat
 voting_percentages = 
   voting_percentages %>% 
   mutate(
-    data = map(state_code, ~(gtrends(keyword = "vote + voting", geo = .x, time = '2016-09-30 2020-10-26')$interest_over_time))
+    data = map(state_code, ~(gtrends(keyword = "vote + voting", geo = .x, time = '2016-09-30 2020-10-31')$interest_over_time))
   )
 
-for (i in 1:50) {
+for (i in 1:51) {
     voting_percentages$data[[i]]$hits = str_replace(voting_percentages$data[[i]]$hits, "<1", "0")
     voting_percentages$data[[i]]$hits = as.numeric(voting_percentages$data[[i]]$hits)
 }
@@ -53,7 +55,7 @@ voting_percentages =
   select(state, state_abbreviation, date, hits) %>% 
   mutate(date = as.Date(date)) %>% 
   filter(
-    date <= "2016-10-23" | date >= "2020-10-01" ## Change to october 4th
+    date <= "2016-10-29" | date >= "2020-10-01" ## Change to october 4th
     )
 
 voting_percentages = 
@@ -175,10 +177,25 @@ map3 = map3 %>% layout(
 
 map3
 
+
+correlation = read_csv("./data/correlation.csv")
+
+cor.test(correlation$percent_change, correlation$turnout_change, method = "pearson") 
+
+correlation %>% 
+  ggplot() +
+  geom_point(aes(x = percent_change, y = turnout_change)) +
+  labs(
+    title = "% Change in Google searches vs. % Change in voter turnout",
+    x = "% Change in Google searches, 2016-2020",
+    y = "% Change in voter turnout, 2016-2020"
+  ) + 
+  theme_minimal()
+
 #Sys.setenv('plotly_username'='xxxx')
 #Sys.setenv('plotly_api_key'='xxxx')
 #api_create(map1, filename = 'map1', sharing = 'public')
-#api_create(map2, filename = 'map2', sharing = 'public')
-#api_create(map3, filename = 'map3', sharing = 'public')
+#api_create(map2, filename = 'map2v2', sharing = 'public')
+#api_create(map3, filename = 'map3v2', sharing = 'public')
 ```
 
